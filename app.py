@@ -17,10 +17,11 @@ import streamlit as st
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 import registry as reg
+from live_dashboard import render_live_dashboard
 from analysis import compute_vibration, example_signals
 from engineering import make_evidence, sha256_samples, SYSTEM_PROMPT
 
-st.set_page_config(page_title="MarineSense | Alpha 2.0", page_icon="⚓", layout="wide")
+st.set_page_config(page_title="MarineSense | Alpha 2.1", page_icon="⚓", layout="wide")
 
 
 def read_secret(key: str) -> str:
@@ -31,7 +32,7 @@ def read_secret(key: str) -> str:
 
 
 st.title("⚓ MarineSense")
-st.caption("Alpha 2.0 · Fleet / Vessel / Machinery Registry + Evidence-Based Vibration Analysis")
+st.caption("Alpha 2.1 · Machinery registry + evidence-based analysis + live virtual sensors")
 st.warning("Prototype only — not a certified monitoring, alarm, predictive-maintenance or safety system.")
 
 # A single shared demo code is a temporary gate, NOT production user authentication.
@@ -167,8 +168,9 @@ def groq_interpret(payload, system=SYSTEM_PROMPT):
     return answer
 
 
-tab_fleet, tab_machinery, tab_analysis, tab_history = st.tabs([
-    "1 · Fleet & vessels", "2 · Machinery registry", "3 · Analyse & AI", "4 · Measurements & reports"
+tab_fleet, tab_machinery, tab_analysis, tab_history, tab_live = st.tabs([
+    "1 · Fleet & vessels", "2 · Machinery registry", "3 · Analyse & AI",
+    "4 · Measurements & reports", "5 · Live simulator (2.1)"
 ])
 
 with tab_fleet:
@@ -488,5 +490,8 @@ with tab_history:
         else:
             st.caption("No AI reports saved yet.")
 
+with tab_live:
+    render_live_dashboard(engine)
+
 st.divider()
-st.caption("MarineSense Alpha 2.0 · Research demonstration. Live OEM integration, secure accounts, validated diagnoses and radiometric thermal analysis are future work.")
+st.caption("MarineSense Alpha 2.1 · Research demonstration. Live sensor tab uses synthetic, session-only data; unattended OEM integration and validated diagnoses are future work.")
