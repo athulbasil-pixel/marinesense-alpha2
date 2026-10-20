@@ -18,7 +18,8 @@ def install_theme():
     st.markdown("""<style>
     :root { --ms-navy:#13212e; --ms-navy2:#1b2f3d; --ms-yellow:#ffcb27;
             --ms-ink:#17222f; --ms-muted:#64748b; --ms-border:#e1e7ed; }
-    .block-container { max-width:1580px; padding-top:1.0rem; padding-bottom:1.5rem; }
+    /* Keep the masthead below the floating Streamlit/Grok toolbar on desktop and mobile. */
+    .block-container { max-width:1580px; padding-top:5.0rem !important; padding-bottom:1.5rem; }
     #MainMenu {visibility:hidden;}
     .ms-brandbar { display:flex; align-items:center; justify-content:space-between;
         gap:1.4rem; padding: .8rem 1.1rem; background:linear-gradient(110deg,#111d29,#22384b 85%,#13212e);
@@ -79,7 +80,7 @@ def install_theme():
     @media (max-width:950px) { .ms-asset{grid-template-columns:100px 1fr;}
         .ms-asset-facts {grid-column:1/-1;border-left:0;border-top:1px solid #dde5ec;padding: .55rem 0 0;}
         .ms-asset-name{font-size:1.07rem;} .ms-brandbar img{max-width:290px;} }
-    @media (max-width:560px) { .ms-brandbar{padding:.65rem;gap:.5rem;} .ms-brandbar img{max-width:210px;}
+    @media (max-width:560px) { .block-container{padding-top:5.5rem !important;} .ms-brandbar{padding:.65rem;gap:.5rem;} .ms-brandbar img{max-width:210px;}
         .ms-brandtitle{font-size:.46rem;} .ms-version{font-size:.57rem;}
         .ms-asset{grid-template-columns:1fr;gap:.5rem;} .ms-asset-illustration{display:none;}
         .ms-asset-facts{grid-column:auto;} .ms-readout{min-height:128px;} }
