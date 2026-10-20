@@ -9,6 +9,7 @@ import io
 import json
 import os
 from pathlib import Path
+from ui_theme import install_theme, render_masthead
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,7 +22,7 @@ from live_dashboard import render_live_dashboard
 from analysis import compute_vibration, example_signals
 from engineering import make_evidence, sha256_samples, SYSTEM_PROMPT
 
-st.set_page_config(page_title="MarineSense | Alpha 2.1", page_icon="⚓", layout="wide")
+st.set_page_config(page_title="MarineSense | Machinery Intelligence", page_icon="⚙️", layout="wide", initial_sidebar_state="collapsed")
 
 
 def read_secret(key: str) -> str:
@@ -31,9 +32,9 @@ def read_secret(key: str) -> str:
         return ""
 
 
-st.title("⚓ MarineSense")
-st.caption("Alpha 2.1 · Machinery registry + evidence-based analysis + live virtual sensors + history")
-st.warning("Prototype only — not a certified monitoring, alarm, predictive-maintenance or safety system.")
+# Phase A — industrial MarineSense masthead and navigation.
+install_theme()
+render_masthead()
 
 # A single shared demo code is a temporary gate, NOT production user authentication.
 passcode = read_secret("DEMO_PASSCODE")
@@ -169,8 +170,8 @@ def groq_interpret(payload, system=SYSTEM_PROMPT):
 
 
 tab_fleet, tab_machinery, tab_analysis, tab_history, tab_live = st.tabs([
-    "1 · Fleet & vessels", "2 · Machinery registry", "3 · Analyse & AI",
-    "4 · Measurements & reports", "5 · Live simulator (2.1)"
+    "▣ Fleet & Vessels", "▦ Machinery Registry", "▥ Analyse & AI",
+    "▤ Measurements & Reports", "〽 Live Simulator (2.1)"
 ])
 
 with tab_fleet:

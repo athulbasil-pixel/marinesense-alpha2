@@ -18,6 +18,7 @@ import registry as reg
 # Imports the three new metadata tables before registry.get_engine().
 import live_history as history
 from live_simulator import MAX_DEMO_HOURS, initial_parameters, synthesize_frame
+from ui_theme import render_asset_header, render_sensor_cards
 
 TICK_SECONDS = 5
 MAX_HISTORY_ROWS = MAX_DEMO_HOURS * 3600 // TICK_SECONDS * 4
@@ -127,7 +128,7 @@ def _tick(engine, state: dict, machine_id: int, points: list[dict], now: float,
 
 def _historical_view(engine, machine_id: int):
     st.divider()
-    st.subheader("Historical Record · Recorded Demonstration Sessions")
+    st.subheader("Recorded Simulation History")
     st.caption("These are simulation-session records from Supabase, not raw waveforms or validated fault events.")
     sessions = history.list_sessions(engine, machine_id)
     if not sessions:
@@ -155,58 +156,8 @@ def _historical_view(engine, machine_id: int):
         st.dataframe(pd.DataFrame(events), hide_index=True, use_container_width=True)
 
 
-def _shipboard_style():
-    """Display-only CSS; no status colours imply validated machinery severity."""
-    st.markdown("""
-    <style>
-      .ms-hero { background:linear-gradient(115deg,#102b3f,#183f54); padding:1.15rem 1.3rem;
-          border-radius:13px; color:#f2f8fb; margin:.4rem 0 1rem; border:1px solid #315567; }
-      .ms-eyebrow {font-size:.73rem;letter-spacing:.13em;font-weight:700;color:#a5d4e1;}
-      .ms-title {font-size:1.85rem;font-weight:730;line-height:1.15;margin:.35rem 0;}
-      .ms-sub {color:#d8e8ed;font-size:.87rem;margin-top:.45rem;}
-      .ms-strip {display:flex;gap:.45rem;flex-wrap:wrap;margin:.6rem 0 .9rem;}
-      .ms-chip {padding:.4rem .65rem;border-radius:7px;background:#e9f1f4;
-          border:1px solid #cadce4;color:#173d4f;font-weight:650;font-size:.8rem;}
-      .ms-card {padding:.85rem 1rem;border:1px solid #cbdae2;border-top:4px solid #29758b;
-          border-radius:10px;background:#f6fafc;min-height:128px;}
-      .ms-card-id {font-size:.75rem;letter-spacing:.06em;color:#3b6276;font-weight:750;}
-      .ms-card-value {font-size:1.7rem;font-weight:770;color:#123648;margin:.5rem 0 .15rem;
-          font-variant-numeric:tabular-nums;}
-      .ms-card-caption {font-size:.8rem;color:#436474;line-height:1.4;}
-      .ms-note {font-size:.8rem;color:#5e7180;margin:.55rem 0;}
-      @media (prefers-color-scheme: dark) {
-        .ms-chip {background:#1e3948;color:#d8eef5;border-color:#426372;}
-        .ms-card {background:#183040;border-color:#355364;border-top-color:#4eacc5;}
-        .ms-card-id,.ms-card-value,.ms-card-caption,.ms-note {color:#e1edf4;}
-      }
-    </style>""", unsafe_allow_html=True)
-
-
-def _sensor_cards(points, latest):
-    """Render four fixed-position readouts. Unmeasured sensors remain unclassified."""
-    import html
-    cols = st.columns(len(points))
-    for col, point in zip(cols, points):
-        with col:
-            val = latest.get(point["id"])
-            reading = f"{val:.4f}" if val is not None else "—"
-            name = html.escape(str(point["name"]))
-            code = html.escape(str(point["sensor_code"] or f"POINT-{point['id']}"))
-            st.markdown(f"""<div class="ms-card"><div class="ms-card-id">{code}</div>
-               <div class="ms-card-value">{reading}</div>
-               <div class="ms-card-caption">RMS · arbitrary units<br>{name}</div></div>""",
-               unsafe_allow_html=True)
-
-
 def render_live_dashboard(engine):
-    _shipboard_style()
-    st.markdown("""<div class="ms-hero"><div class="ms-eyebrow">MARINESENSE | MACHINERY MONITORING</div>
-    <div class="ms-title">Live Machinery Overview</div>
-    <div class="ms-sub">Four-point vibration monitoring · engineering demonstration environment</div></div>""",
-    unsafe_allow_html=True)
-    st.warning("SIMULATED SIGNALS · NO OEM SENSORS · NO CERTIFIED ALARMS OR FAULT DIAGNOSIS")
-    st.caption("Active-browser simulator only. Persistent summaries are stored only when recording is enabled; "
-               "no unattended monitoring is performed.")
+    st.caption("MACHINERY / LIVE SIMULATION · Four virtual accelerometer positions, not OEM hardware")
     machines = reg.list_machines(engine)
     if not machines:
         st.info("Register a machinery assembly before starting the simulator.")
@@ -226,83 +177,86 @@ def render_live_dashboard(engine):
     points = points[:4]
     if len(points) < 4:
         st.info(f"{len(points)} sensor location(s) registered; the initial target is four.")
-    st.markdown(f"**Selected asset:** {machine['ms_number']} · {machine['name']}")
-    st.caption("SIMULATION ONLY · 1× and 4× are simulated shaft-related frequencies · RMS in arbitrary units")
     state = _get_state(machine_id, points)
+    rpm_key = f"alpha21_rpm_{machine_id}"
 
     @st.fragment(run_every=f"{TICK_SECONDS}s")
     def _live_panel():
         now = time.time()
-        st.subheader("Simulation operator controls")
-        persist_option = st.checkbox("Save one-minute simulation summaries and operator events to Supabase",
-                                     value=False, disabled=state["running"],
-                                     key=f"alpha21_record_{machine_id}")
-        if persist_option:
-            st.caption("A new recorded session is created on Start. One summary per sensor per observed minute; "
-                       "a partial final minute is saved on Stop. No raw waveforms or AI calls are saved.")
-            if engine.dialect.name != "postgresql":
-                st.warning("A permanent PostgreSQL DATABASE_URL is required. SQLite fallback is temporary.")
-        col_a, col_b, col_c = st.columns([1, 1, 2])
-        with col_a:
-            start = st.button("▶ Start 3-hour maximum session", disabled=state["running"],
-                              key=f"alpha21_start_{machine_id}")
-        with col_b:
-            stop = st.button("■ Stop", disabled=not state["running"],
-                             key=f"alpha21_stop_{machine_id}")
-        with col_c:
-            rpm = st.slider("Simulated shaft RPM (shared)", 600, 3000, 1800, 60,
-                            key=f"alpha21_rpm_{machine_id}")
-        if start:
-            if persist_option and engine.dialect.name != "postgresql":
-                st.error("Cannot start persistent recording without the permanent PostgreSQL database.")
-            else:
-                session_id = None
+        # Refresh asset details with the simulator's RPM during fragment updates.
+        render_asset_header(machine, len(points), st.session_state.get(rpm_key, 1800)
+                            if state["records"] else None)
+        overview_slot = st.container()
+        with st.expander("Simulation operator controls · Start / Stop / Adjust", expanded=False):
+            persist_option = st.checkbox("Save one-minute simulation summaries and operator events to Supabase",
+                                         value=False, disabled=state["running"],
+                                         key=f"alpha21_record_{machine_id}")
+            if persist_option:
+                st.caption("A new recorded session is created on Start. One summary per sensor per observed minute; "
+                           "a partial final minute is saved on Stop. No raw waveforms or AI calls are saved.")
+                if engine.dialect.name != "postgresql":
+                    st.warning("A permanent PostgreSQL DATABASE_URL is required. SQLite fallback is temporary.")
+            col_a, col_b, col_c = st.columns([1, 1, 2])
+            with col_a:
+                start = st.button("▶ Start 3-hour maximum session", disabled=state["running"],
+                                  key=f"alpha21_start_{machine_id}")
+            with col_b:
+                stop = st.button("■ Stop", disabled=not state["running"],
+                                 key=f"alpha21_stop_{machine_id}")
+            with col_c:
+                rpm = st.slider("Simulated shaft RPM (shared)", 600, 3000, 1800, 60,
+                                key=f"alpha21_rpm_{machine_id}")
+            if start:
+                if persist_option and engine.dialect.name != "postgresql":
+                    st.error("Cannot start persistent recording without the permanent PostgreSQL database.")
+                else:
+                    session_id = None
+                    try:
+                        if persist_option:
+                            session_id = history.open_session(engine, machine_id, [p["id"] for p in points])
+                        state.update(running=True, started_at=now,
+                                     started_utc=datetime.now(timezone.utc), last_bucket=None,
+                                     recording=bool(persist_option), session_id=session_id,
+                                     minute_acc=None, store_error=None, saved_rows=0,
+                                     previous_rpm=None)
+                        for key in ("records", "latest", "frames", "events", "previous_configs"):
+                            state[key].clear()
+                    except (SQLAlchemyError, OSError, ValueError) as exc:
+                        st.error("Could not open a recorded session. Nothing was started or written; "
+                                 "check the database connection and registered sensor IDs.")
+            if stop:
                 try:
-                    if persist_option:
-                        session_id = history.open_session(engine, machine_id, [p["id"] for p in points])
-                    state.update(running=True, started_at=now,
-                                 started_utc=datetime.now(timezone.utc), last_bucket=None,
-                                 recording=bool(persist_option), session_id=session_id,
-                                 minute_acc=None, store_error=None, saved_rows=0,
-                                 previous_rpm=None)
-                    for key in ("records", "latest", "frames", "events", "previous_configs"):
-                        state[key].clear()
-                except (SQLAlchemyError, OSError, ValueError) as exc:
-                    st.error("Could not open a recorded session. Nothing was started or written; "
-                             "check the database connection and registered sensor IDs.")
-        if stop:
-            try:
-                _stop_demo(engine, state, machine_id, "Operator stopped the simulated session")
-            except (SQLAlchemyError, OSError, ValueError):
-                state["running"] = False
-                state["store_error"] = "Recording could not be finalised; inspect database connectivity. " \
-                                       "Current browser-session CSV is still available."
-        if state["running"] and now - state["started_at"] >= MAX_DEMO_HOURS * 3600:
-            try:
-                _stop_demo(engine, state, machine_id, "Three-hour maximum demo reached")
-            except (SQLAlchemyError, OSError, ValueError):
-                state["running"] = False
-                state["store_error"] = "Maximum duration reached but the last summary could not be saved."
-            st.info("Three-hour maximum reached; simulation stopped.")
+                    _stop_demo(engine, state, machine_id, "Operator stopped the simulated session")
+                except (SQLAlchemyError, OSError, ValueError):
+                    state["running"] = False
+                    state["store_error"] = "Recording could not be finalised; inspect database connectivity. " \
+                                           "Current browser-session CSV is still available."
+            if state["running"] and now - state["started_at"] >= MAX_DEMO_HOURS * 3600:
+                try:
+                    _stop_demo(engine, state, machine_id, "Three-hour maximum demo reached")
+                except (SQLAlchemyError, OSError, ValueError):
+                    state["running"] = False
+                    state["store_error"] = "Maximum duration reached but the last summary could not be saved."
+                st.info("Three-hour maximum reached; simulation stopped.")
 
-        selected_point_id = st.selectbox("Adjust virtual sensor", [p["id"] for p in points],
-                                         format_func=lambda i: _point_name(next(p for p in points if p["id"] == i)),
-                                         key=f"alpha21_sensor_selector_{machine_id}")
-        current = state["params"][selected_point_id]
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            current["one_x"] = st.slider("1× amplitude", 0.0, 1.5, float(current["one_x"]), 0.05,
-                                         key=f"alpha21_one_{machine_id}_{selected_point_id}")
-        with c2:
-            current["four_x"] = st.slider("4× harmonic amplitude", 0.0, 1.0, float(current["four_x"]), 0.05,
-                                          key=f"alpha21_four_{machine_id}_{selected_point_id}")
-        with c3:
-            current["noise"] = st.slider("Noise", 0.0, 0.2, float(current["noise"]), 0.01,
-                                         key=f"alpha21_noise_{machine_id}_{selected_point_id}")
-        with c4:
-            current["impacts"] = st.slider("Synthetic impulses", 0.0, 1.0, float(current["impacts"]), 0.1,
-                                           key=f"alpha21_impacts_{machine_id}_{selected_point_id}")
-        st.caption("Changes affect only the selected virtual sensor. The 4× component follows simulated RPM.")
+            selected_point_id = st.selectbox("Adjust virtual sensor", [p["id"] for p in points],
+                                             format_func=lambda i: _point_name(next(p for p in points if p["id"] == i)),
+                                             key=f"alpha21_sensor_selector_{machine_id}")
+            current = state["params"][selected_point_id]
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                current["one_x"] = st.slider("1× amplitude", 0.0, 1.5, float(current["one_x"]), 0.05,
+                                             key=f"alpha21_one_{machine_id}_{selected_point_id}")
+            with c2:
+                current["four_x"] = st.slider("4× harmonic amplitude", 0.0, 1.0, float(current["four_x"]), 0.05,
+                                              key=f"alpha21_four_{machine_id}_{selected_point_id}")
+            with c3:
+                current["noise"] = st.slider("Noise", 0.0, 0.2, float(current["noise"]), 0.01,
+                                             key=f"alpha21_noise_{machine_id}_{selected_point_id}")
+            with c4:
+                current["impacts"] = st.slider("Synthetic impulses", 0.0, 1.0, float(current["impacts"]), 0.1,
+                                               key=f"alpha21_impacts_{machine_id}_{selected_point_id}")
+            st.caption("Changes affect only the selected virtual sensor. The 4× component follows simulated RPM.")
 
         if state["running"]:
             try:
@@ -315,36 +269,36 @@ def render_live_dashboard(engine):
             st.error(state["store_error"])
         if state["running"]:
             elapsed = now - state["started_at"]
-            st.success(f"SIMULATION RUNNING · {int(elapsed // 60)} min {int(elapsed % 60):02d} s elapsed · "
-                       f"Updates every {TICK_SECONDS} seconds while this browser stays connected")
+            st.caption(f"Live virtual sensor stream · {int(elapsed // 60)} min {int(elapsed % 60):02d} s elapsed · "
+                       f"Updates every {TICK_SECONDS} s while this browser stays connected")
         else:
-            st.info("SIMULATION STOPPED. Start to generate live data. Previous session readings "
-                    "remain temporarily available in this browser session.")
-        status = "SIMULATION ACTIVE" if state["running"] else "SIMULATION STOPPED"
-        recording_status = "RECORDING ON" if state["recording"] and state["running"] else (
-            "RECORDED SESSION CLOSED" if state["recording"] else "RECORDING OFF")
-        st.markdown('<div class="ms-strip"><span class="ms-chip">' + status +
-                    '</span><span class="ms-chip">' + recording_status +
-                    '</span><span class="ms-chip">4 SENSOR POSITIONS (MAX)</span></div>',
-                    unsafe_allow_html=True)
-        if state["recording"]:
-            st.caption(f"Saved sensor-minute rows: {state['saved_rows']} · "
-                       f"Session: {state['session_id'][:8] if state['session_id'] else 'none'}")
-        else:
-            st.caption("Recording OFF · live readings held temporarily in this browser session")
-
-        st.subheader("Machinery Overview · Four Sensor Positions")
-        _sensor_cards(points, state["latest"])
-        st.caption("Numeric signal indicators only. No alarm limits, health scoring or condition severity categories are applied.")
+            st.caption("Simulator stopped · previous browser-session readings are displayed when available")
+        with overview_slot:
+            status = "SIMULATION ACTIVE" if state["running"] else "SIMULATION STOPPED"
+            recording_status = "RECORDING ON" if state["recording"] and state["running"] else (
+                "RECORDED SESSION CLOSED" if state["recording"] else "RECORDING OFF")
+            status_cls = 'ms-highlight' if state['running'] else ''
+            st.markdown(f'<div class="ms-status"><span class="{status_cls}">{status}</span>'
+                        f'<span>{recording_status}</span><span>{len(points)} DISPLAYED SENSOR POSITIONS</span></div>',
+                        unsafe_allow_html=True)
+            if state["recording"]:
+                st.caption(f"Saved sensor-minute rows: {state['saved_rows']} · "
+                           f"Session: {state['session_id'][:8] if state['session_id'] else 'none'}")
+            else:
+                st.caption("Recording OFF · readings held temporarily in this browser session")
+            render_sensor_cards(points, state["latest"], state["running"])
+            st.markdown('<div class="ms-note">Numeric synthetic readings only. ' 
+                        'No calibrated limits, severity classification or certified alerts.</div>',
+                        unsafe_allow_html=True)
         if state["records"]:
             df = pd.DataFrame(state["records"])
-            st.subheader("RMS Time Trend · All Measurement Positions")
+            st.markdown("**Vibration Trend · RMS by Sensor**")
             trend = df.pivot_table(index="time_utc", columns="sensor", values="rms", aggfunc="last")
             st.line_chart(trend, height=305)
             st.caption("UTC timestamps · Five-second observed updates · gaps are not reconstructed")
             frame = state["frames"].get(selected_point_id)
             if frame:
-                st.subheader("Selected Sensor · Waveform and Frequency Spectrum")
+                st.markdown("**Selected Sensor · Waveform and Spectrum**")
                 c1, c2 = st.columns(2)
                 with c1:
                     t = np.arange(len(frame["samples"])) / frame["sample_rate_hz"]
