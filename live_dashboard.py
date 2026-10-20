@@ -127,7 +127,7 @@ def _tick(engine, state: dict, machine_id: int, points: list[dict], now: float,
 
 def _historical_view(engine, machine_id: int):
     st.divider()
-    st.subheader("Saved live demonstration history")
+    st.subheader("Historical Record · Recorded Demonstration Sessions")
     st.caption("These are simulation-session records from Supabase, not raw waveforms or validated fault events.")
     sessions = history.list_sessions(engine, machine_id)
     if not sessions:
@@ -146,7 +146,7 @@ def _historical_view(engine, machine_id: int):
                            file_name=f"{session_id}_live_summaries.csv", mime="text/csv",
                            key=f"alpha21_persist_download_{machine_id}")
         trend = df.pivot_table(index="time_utc", columns="sensor", values="avg_rms", aggfunc="last")
-        st.line_chart(trend)
+        st.line_chart(trend, height=300)
     else:
         st.info("Session opened but no minute summaries have been saved yet.")
     events = history.list_events(engine, session_id)
@@ -155,11 +155,58 @@ def _historical_view(engine, machine_id: int):
         st.dataframe(pd.DataFrame(events), hide_index=True, use_container_width=True)
 
 
+def _shipboard_style():
+    """Display-only CSS; no status colours imply validated machinery severity."""
+    st.markdown("""
+    <style>
+      .ms-hero { background:linear-gradient(115deg,#102b3f,#183f54); padding:1.15rem 1.3rem;
+          border-radius:13px; color:#f2f8fb; margin:.4rem 0 1rem; border:1px solid #315567; }
+      .ms-eyebrow {font-size:.73rem;letter-spacing:.13em;font-weight:700;color:#a5d4e1;}
+      .ms-title {font-size:1.85rem;font-weight:730;line-height:1.15;margin:.35rem 0;}
+      .ms-sub {color:#d8e8ed;font-size:.87rem;margin-top:.45rem;}
+      .ms-strip {display:flex;gap:.45rem;flex-wrap:wrap;margin:.6rem 0 .9rem;}
+      .ms-chip {padding:.4rem .65rem;border-radius:7px;background:#e9f1f4;
+          border:1px solid #cadce4;color:#173d4f;font-weight:650;font-size:.8rem;}
+      .ms-card {padding:.85rem 1rem;border:1px solid #cbdae2;border-top:4px solid #29758b;
+          border-radius:10px;background:#f6fafc;min-height:128px;}
+      .ms-card-id {font-size:.75rem;letter-spacing:.06em;color:#3b6276;font-weight:750;}
+      .ms-card-value {font-size:1.7rem;font-weight:770;color:#123648;margin:.5rem 0 .15rem;
+          font-variant-numeric:tabular-nums;}
+      .ms-card-caption {font-size:.8rem;color:#436474;line-height:1.4;}
+      .ms-note {font-size:.8rem;color:#5e7180;margin:.55rem 0;}
+      @media (prefers-color-scheme: dark) {
+        .ms-chip {background:#1e3948;color:#d8eef5;border-color:#426372;}
+        .ms-card {background:#183040;border-color:#355364;border-top-color:#4eacc5;}
+        .ms-card-id,.ms-card-value,.ms-card-caption,.ms-note {color:#e1edf4;}
+      }
+    </style>""", unsafe_allow_html=True)
+
+
+def _sensor_cards(points, latest):
+    """Render four fixed-position readouts. Unmeasured sensors remain unclassified."""
+    import html
+    cols = st.columns(len(points))
+    for col, point in zip(cols, points):
+        with col:
+            val = latest.get(point["id"])
+            reading = f"{val:.4f}" if val is not None else "—"
+            name = html.escape(str(point["name"]))
+            code = html.escape(str(point["sensor_code"] or f"POINT-{point['id']}"))
+            st.markdown(f"""<div class="ms-card"><div class="ms-card-id">{code}</div>
+               <div class="ms-card-value">{reading}</div>
+               <div class="ms-card-caption">RMS · arbitrary units<br>{name}</div></div>""",
+               unsafe_allow_html=True)
+
+
 def render_live_dashboard(engine):
-    st.header("Alpha 2.1 · Live virtual sensor demonstration")
-    st.warning("SIMULATED DATA ONLY — no OEM sensor connected; no physical machinery fault diagnosis or safety alarm.")
-    st.caption("This simulator runs only in an active browser session. Optional one-minute summary recording "
-               "does not make Streamlit a continuous, unattended data-acquisition system.")
+    _shipboard_style()
+    st.markdown("""<div class="ms-hero"><div class="ms-eyebrow">MARINESENSE | MACHINERY MONITORING</div>
+    <div class="ms-title">Live Machinery Overview</div>
+    <div class="ms-sub">Four-point vibration monitoring · engineering demonstration environment</div></div>""",
+    unsafe_allow_html=True)
+    st.warning("SIMULATED SIGNALS · NO OEM SENSORS · NO CERTIFIED ALARMS OR FAULT DIAGNOSIS")
+    st.caption("Active-browser simulator only. Persistent summaries are stored only when recording is enabled; "
+               "no unattended monitoring is performed.")
     machines = reg.list_machines(engine)
     if not machines:
         st.info("Register a machinery assembly before starting the simulator.")
@@ -179,7 +226,8 @@ def render_live_dashboard(engine):
     points = points[:4]
     if len(points) < 4:
         st.info(f"{len(points)} sensor location(s) registered; the initial target is four.")
-    st.caption(f"Machine: {machine['ms_number']} · {machine['name']} · SIMULATION only; RMS values are arbitrary.")
+    st.markdown(f"**Selected asset:** {machine['ms_number']} · {machine['name']}")
+    st.caption("SIMULATION ONLY · 1× and 4× are simulated shaft-related frequencies · RMS in arbitrary units")
     state = _get_state(machine_id, points)
 
     @st.fragment(run_every=f"{TICK_SECONDS}s")
@@ -272,29 +320,31 @@ def render_live_dashboard(engine):
         else:
             st.info("SIMULATION STOPPED. Start to generate live data. Previous session readings "
                     "remain temporarily available in this browser session.")
+        status = "SIMULATION ACTIVE" if state["running"] else "SIMULATION STOPPED"
+        recording_status = "RECORDING ON" if state["recording"] and state["running"] else (
+            "RECORDED SESSION CLOSED" if state["recording"] else "RECORDING OFF")
+        st.markdown('<div class="ms-strip"><span class="ms-chip">' + status +
+                    '</span><span class="ms-chip">' + recording_status +
+                    '</span><span class="ms-chip">4 SENSOR POSITIONS (MAX)</span></div>',
+                    unsafe_allow_html=True)
         if state["recording"]:
-            st.caption(f"Database recording: {'ACTIVE' if state['running'] else 'SESSION ENDED'} · "
-                       f"Saved minute rows: {state['saved_rows']} · "
+            st.caption(f"Saved sensor-minute rows: {state['saved_rows']} · "
                        f"Session: {state['session_id'][:8] if state['session_id'] else 'none'}")
         else:
-            st.caption("Database recording OFF: browser-session readings are not persistent.")
+            st.caption("Recording OFF · live readings held temporarily in this browser session")
 
-        st.subheader("Live RMS — four measurement locations")
-        cols = st.columns(len(points))
-        for col, point in zip(cols, points):
-            with col:
-                st.metric(point["sensor_code"] or f"Point {point['id']}",
-                          f"{state['latest'][point['id']]:.4f}" if point["id"] in state["latest"] else "—")
-                st.caption(point["name"])
-        st.caption("Arbitrary-unit synthetic readings; no condition limits or fault severity classifications.")
+        st.subheader("Machinery Overview · Four Sensor Positions")
+        _sensor_cards(points, state["latest"])
+        st.caption("Numeric signal indicators only. No alarm limits, health scoring or condition severity categories are applied.")
         if state["records"]:
             df = pd.DataFrame(state["records"])
-            st.subheader("Live RMS trend (UTC)")
+            st.subheader("RMS Time Trend · All Measurement Positions")
             trend = df.pivot_table(index="time_utc", columns="sensor", values="rms", aggfunc="last")
-            st.line_chart(trend)
+            st.line_chart(trend, height=305)
+            st.caption("UTC timestamps · Five-second observed updates · gaps are not reconstructed")
             frame = state["frames"].get(selected_point_id)
             if frame:
-                st.subheader("Selected sensor — waveform and spectrum")
+                st.subheader("Selected Sensor · Waveform and Frequency Spectrum")
                 c1, c2 = st.columns(2)
                 with c1:
                     t = np.arange(len(frame["samples"])) / frame["sample_rate_hz"]
