@@ -32,7 +32,7 @@ def read_secret(key: str) -> str:
 
 
 st.title("⚓ MarineSense")
-st.caption("Alpha 2.1 · Machinery registry + evidence-based analysis + live virtual sensors")
+st.caption("Alpha 2.1 · Machinery registry + evidence-based analysis + live virtual sensors + history")
 st.warning("Prototype only — not a certified monitoring, alarm, predictive-maintenance or safety system.")
 
 # A single shared demo code is a temporary gate, NOT production user authentication.
@@ -494,4 +494,4 @@ with tab_live:
     render_live_dashboard(engine)
 
 st.divider()
-st.caption("MarineSense Alpha 2.1 · Research demonstration. Live sensor tab uses synthetic, session-only data; unattended OEM integration and validated diagnoses are future work.")
+st.caption("MarineSense Alpha 2.1 · Research demonstration. Optional one-minute live simulation summaries and events may be stored in the configured database; continuous background monitoring, calibrated units and validated diagnoses are future work.")
