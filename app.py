@@ -19,6 +19,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 import registry as reg
 from live_dashboard import render_live_dashboard
+from condition_dashboard import render_condition_dashboard
 from analysis import compute_vibration, example_signals
 from engineering import make_evidence, sha256_samples, SYSTEM_PROMPT
 
@@ -169,9 +170,9 @@ def groq_interpret(payload, system=SYSTEM_PROMPT):
     return answer
 
 
-tab_fleet, tab_machinery, tab_analysis, tab_history, tab_live = st.tabs([
+tab_fleet, tab_machinery, tab_analysis, tab_history, tab_live, tab_condition = st.tabs([
     "▣ Fleet & Vessels", "▦ Machinery Registry", "▥ Analyse & AI",
-    "▤ Measurements & Reports", "〽 Live Simulator (2.1)"
+    "▤ Measurements & Reports", "〽 Live Simulator (2.1)", "◈ Condition Review"
 ])
 
 with tab_fleet:
@@ -493,6 +494,9 @@ with tab_history:
 
 with tab_live:
     render_live_dashboard(engine)
+
+with tab_condition:
+    render_condition_dashboard(engine)
 
 st.divider()
 st.caption("MarineSense Alpha 2.1 · Research demonstration. Optional one-minute live simulation summaries and events may be stored in the configured database; continuous background monitoring, calibrated units and validated diagnoses are future work.")
